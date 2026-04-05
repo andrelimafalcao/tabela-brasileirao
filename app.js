@@ -35,26 +35,30 @@ async function loadData() {
 
 function parseStandings(raw) {
   try {
-    const list = raw.response[0].league.standings[0];
-    return list.map(t => ({
-      rank:         t.rank,
-      name:         t.team.name,
-      logo:         t.team.logo,
-      played:       t.all.played,
-      win:          t.all.win,
-      draw:         t.all.draw,
-      lose:         t.all.lose,
-      goalsFor:     t.all.goals.for,
-      goalsAgainst: t.all.goals.against,
-      goalsDiff:    t.goalsDiff,
-      points:       t.points,
-      // Derived
-      pointsDisputed: t.all.played * 3,
-      pointsLost:     (t.all.played * 3) - t.points,
-      performance:    t.all.played > 0
-        ? ((t.points / (t.all.played * 3)) * 100).toFixed(1)
-        : '—',
-    }));
+    const list = raw.response.standing;
+    return list.map(t => {
+      const [goalsFor, goalsAgainst] = (t.scoresStr || '0-0').split('-').map(Number);
+      return {
+        rank:         t.idx,
+        name:         t.name,
+        logo:         `https://images.fotmob.com/image_resources/logo/teamlogo/${t.id}.png`,
+        played:       t.played,
+        win:          t.wins,
+        draw:         t.draws,
+        lose:         t.losses,
+        goalsFor,
+        goalsAgainst,
+        goalsDiff:    t.goalConDiff,
+        points:       t.pts,
+        qualColor:    t.qualColor || null,
+        // Derived
+        pointsDisputed: t.played * 3,
+        pointsLost:     (t.played * 3) - t.pts,
+        performance:    t.played > 0
+          ? ((t.pts / (t.played * 3)) * 100).toFixed(1)
+          : '—',
+      };
+    });
   } catch {
     return [];
   }

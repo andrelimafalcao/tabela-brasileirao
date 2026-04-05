@@ -16,14 +16,14 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Fetch standings from API-Football
+      - name: Fetch standings from free-api-live-football-data
         env:
           API_KEY: ${{ secrets.API_FOOTBALL_KEY }}
         run: |
           HTTP_STATUS=$(curl -s -o data.json -w "%{http_code}" \
-            "https://v3.football.api-sports.io/standings?league=71&season=2026" \
-            -H "X-RapidAPI-Key: $API_KEY" \
-            -H "X-RapidAPI-Host: v3.football.api-sports.io")
+            "https://free-api-live-football-data.p.rapidapi.com/football-get-standing-all?leagueid=268" \
+            -H "x-rapidapi-key: $API_KEY" \
+            -H "x-rapidapi-host: free-api-live-football-data.p.rapidapi.com")
 
           echo "HTTP status: $HTTP_STATUS"
 
@@ -37,8 +37,8 @@ jobs:
           if ! python3 -c "
           import json, sys
           data = json.load(open('data.json'))
-          standings = data['response'][0]['league']['standings'][0]
-          print(f'Standings fetched: {len(standings)} teams')
+          standing = data['response']['standing']
+          print(f'Standings fetched: {len(standing)} teams')
           " 2>/dev/null; then
             echo "Unexpected API response shape — keeping existing data.json"
             git checkout -- data.json 2>/dev/null || true
