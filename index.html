@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Brasileirão 2026 — Classificação</title>
+  <meta name="description" content="Tabela de classificação do Brasileirão Série A 2026 — por pontos, pontos perdidos e aproveitamento. Atualizado automaticamente." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <header>
+    <div class="header-top">
+      <span style="font-size:24px">🇧🇷</span>
+      <h1>BRASILEIRÃO <span>2026</span></h1>
+      <span class="badge">SÉRIE A</span>
+    </div>
+
+    <nav class="tabs" role="tablist" aria-label="Tipo de classificação">
+      <button class="tab-btn active" data-tab="points"  role="tab" aria-selected="true">
+        Por Pontos Ganhos
+      </button>
+      <button class="tab-btn"        data-tab="lost"    role="tab" aria-selected="false">
+        Por Pontos Perdidos
+      </button>
+      <button class="tab-btn"        data-tab="perf"    role="tab" aria-selected="false">
+        Por Aproveitamento
+      </button>
+    </nav>
+  </header>
+
+  <main>
+
+    <div class="status-bar">
+      <div class="status-left">
+        <div class="pulse" title="Dados atualizados automaticamente"></div>
+        <span class="status-text">
+          Última atualização: <strong id="last-updated">carregando…</strong>
+        </span>
+      </div>
+      <button class="refresh-btn" id="refresh-btn" title="Buscar dados agora">
+        ↻ Atualizar
+      </button>
+    </div>
+
+    <div class="legend">
+      <div class="legend-item">
+        <div class="legend-dot" style="background:#22c55e"></div>
+        <span>Libertadores (grupos)</span>
+      </div>
+      <div class="legend-item">
+        <div class="legend-dot" style="background:#16a34a"></div>
+        <span>Libertadores (pré-fase)</span>
+      </div>
+      <div class="legend-item">
+        <div class="legend-dot" style="background:#f97316"></div>
+        <span>Sul-Americana</span>
+      </div>
+      <div class="legend-item">
+        <div class="legend-dot" style="background:#ef4444"></div>
+        <span>Rebaixamento</span>
+      </div>
+    </div>
+
+    <div id="table-wrap">
+      <div class="state-msg">
+        <div class="icon">⏳</div>
+        <p>Carregando classificação…</p>
+      </div>
+    </div>
+
+  </main>
+
+  <footer>
+    <p>
+      Dados: <a href="https://www.api-football.com" target="_blank" rel="noopener">API-Football</a>
+      &nbsp;·&nbsp;
+      Atualizado automaticamente a cada 30 min
+      &nbsp;·&nbsp;
+      <a href="https://github.com" target="_blank" rel="noopener">Código no GitHub</a>
+    </p>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,73 @@
+name: Fetch Brasileirão Standings
+
+on:
+  schedule:
+    - cron: '*/30 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Fetch standings from API-Football
+        env:
+          API_KEY: ${{ secrets.API_FOOTBALL_KEY }}
+        run: |
+          HTTP_STATUS=$(curl -s -o data.json -w "%{http_code}" \
+            "https://v3.football.api-sports.io/standings?league=71&season=2026" \
+            -H "X-RapidAPI-Key: $API_KEY" \
+            -H "X-RapidAPI-Host: v3.football.api-sports.io")
+
+          echo "HTTP status: $HTTP_STATUS"
+
+          if [ "$HTTP_STATUS" != "200" ]; then
+            echo "API request failed with status $HTTP_STATUS — keeping existing data.json"
+            git checkout -- data.json 2>/dev/null || true
+            exit 0
+          fi
+
+          # Validate response has expected structure
+          if ! python3 -c "
+          import json, sys
+          data = json.load(open('data.json'))
+          standings = data['response'][0]['league']['standings'][0]
+          print(f'Standings fetched: {len(standings)} teams')
+          " 2>/dev/null; then
+            echo "Unexpected API response shape — keeping existing data.json"
+            git checkout -- data.json 2>/dev/null || true
+            exit 0
+          fi
+
+      - name: Inject fetch timestamp
+        run: |
+          python3 - <<'EOF'
+          import json
+          from datetime import datetime, timezone
+
+          with open('data.json', 'r') as f:
+              data = json.load(f)
+
+          data['fetched_at'] = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+
+          with open('data.json', 'w') as f:
+              json.dump(data, f, ensure_ascii=False)
+
+          print(f"Timestamp injected: {data['fetched_at']}")
+          EOF
+
+      - name: Commit updated standings
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data.json
+          git diff --cached --quiet \
+            && echo "No changes to commit" \
+            || git commit -m "chore: update standings $(date -u '+%Y-%m-%d %H:%M UTC') [skip ci]"
+          git push
