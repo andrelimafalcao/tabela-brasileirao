@@ -16,7 +16,33 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
 
+      - name: Check if within Brasileirão match window (Brazil time UTC-3)
+        id: time_check
+        run: |
+          python3 - <<'EOF'
+          from datetime import datetime, timezone, timedelta
+          import os
+
+          brazil_tz = timezone(timedelta(hours=-3))
+          now = datetime.now(brazil_tz)
+          hour = now.hour
+          weekday = now.weekday()  # 0=Mon … 6=Sun
+
+          # Games can happen any day but window is 11:00–23:30 Brazil time
+          in_window = 11 <= hour <= 23
+
+          print(f"Brazil time: {now.strftime('%A %H:%M')} | In window: {in_window}")
+
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+              f.write(f"in_window={'true' if in_window else 'false'}\n")
+          EOF
+
+      - name: Skip — outside match window
+        if: steps.time_check.outputs.in_window == 'false'
+        run: echo "Outside 11:00–23:30 Brazil time — skipping API call."
+
       - name: Fetch standings from free-api-live-football-data
+        if: steps.time_check.outputs.in_window == 'true'
         env:
           API_KEY: ${{ secrets.API_FOOTBALL_KEY }}
         run: |
@@ -35,7 +61,7 @@ jobs:
 
           # Validate response has expected structure
           if ! python3 -c "
-          import json, sys
+          import json
           data = json.load(open('data.json'))
           standing = data['response']['standing']
           print(f'Standings fetched: {len(standing)} teams')
@@ -46,6 +72,7 @@ jobs:
           fi
 
       - name: Inject fetch timestamp
+        if: steps.time_check.outputs.in_window == 'true'
         run: |
           python3 - <<'EOF'
           import json
@@ -63,6 +90,7 @@ jobs:
           EOF
 
       - name: Commit updated standings
+        if: steps.time_check.outputs.in_window == 'true'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
