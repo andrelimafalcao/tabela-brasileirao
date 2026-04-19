@@ -16,81 +16,82 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Check if within Brasileirão match window (Brazil time UTC-3)
-        id: time_check
+      - name: Scrape standings from CBF
         run: |
           python3 - <<'EOF'
-          from datetime import datetime, timezone, timedelta
-          import os
-
-          brazil_tz = timezone(timedelta(hours=-3))
-          now = datetime.now(brazil_tz)
-          hour = now.hour
-          weekday = now.weekday()  # 0=Mon … 6=Sun
-
-          # Games can happen any day but window is 11:00–23:30 Brazil time
-          in_window = 11 <= hour <= 23
-
-          print(f"Brazil time: {now.strftime('%A %H:%M')} | In window: {in_window}")
-
-          with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
-              f.write(f"in_window={'true' if in_window else 'false'}\n")
-          EOF
-
-      - name: Skip — outside match window
-        if: steps.time_check.outputs.in_window == 'false'
-        run: echo "Outside 11:00–23:30 Brazil time — skipping API call."
-
-      - name: Fetch standings from free-api-live-football-data
-        if: steps.time_check.outputs.in_window == 'true'
-        env:
-          API_KEY: ${{ secrets.API_FOOTBALL_KEY }}
-        run: |
-          HTTP_STATUS=$(curl -s -o data.json -w "%{http_code}" \
-            "https://free-api-live-football-data.p.rapidapi.com/football-get-standing-all?leagueid=268" \
-            -H "x-rapidapi-key: $API_KEY" \
-            -H "x-rapidapi-host: free-api-live-football-data.p.rapidapi.com")
-
-          echo "HTTP status: $HTTP_STATUS"
-
-          if [ "$HTTP_STATUS" != "200" ]; then
-            echo "API request failed with status $HTTP_STATUS — keeping existing data.json"
-            git checkout -- data.json 2>/dev/null || true
-            exit 0
-          fi
-
-          # Validate response has expected structure
-          if ! python3 -c "
-          import json
-          data = json.load(open('data.json'))
-          standing = data['response']['standing']
-          print(f'Standings fetched: {len(standing)} teams')
-          " 2>/dev/null; then
-            echo "Unexpected API response shape — keeping existing data.json"
-            git checkout -- data.json 2>/dev/null || true
-            exit 0
-          fi
-
-      - name: Inject fetch timestamp
-        if: steps.time_check.outputs.in_window == 'true'
-        run: |
-          python3 - <<'EOF'
+          import urllib.request
+          import re
           import json
           from datetime import datetime, timezone
 
-          with open('data.json', 'r') as f:
-              data = json.load(f)
+          url = "https://www.cbf.com.br/futebol-brasileiro/tabelas/campeonato-brasileiro/serie-a/2026"
 
-          data['fetched_at'] = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+          req = urllib.request.Request(url, headers={
+              "User-Agent": "Mozilla/5.0 (compatible; standings-bot/1.0)"
+          })
 
-          with open('data.json', 'w') as f:
-              json.dump(data, f, ensure_ascii=False)
+          with urllib.request.urlopen(req, timeout=15) as resp:
+              html = resp.read().decode("utf-8")
 
-          print(f"Timestamp injected: {data['fetched_at']}")
+          # Extract rows from the standings table
+          # Each team row has: position, team name, PTS, J, V, E, D, GP, GC, SG, CA, CV, %
+          pattern = re.compile(
+              r'<strong>(\d+)</strong>.*?'           # position
+              r'href="[^"]+/(\d+)"[^>]*>\s*([^<]+?)\s*</a>.*?'  # team url id + name
+              r'<td[^>]*>\s*(\d+)\s*</td>'           # PTS
+              r'.*?<td[^>]*>\s*(\d+)\s*</td>'        # J
+              r'.*?<td[^>]*>\s*(\d+)\s*</td>'        # V
+              r'.*?<td[^>]*>\s*(\d+)\s*</td>'        # E
+              r'.*?<td[^>]*>\s*(\d+)\s*</td>'        # D
+              r'.*?<td[^>]*>\s*(\d+)\s*</td>'        # GP
+              r'.*?<td[^>]*>\s*(\d+)\s*</td>'        # GC
+              r'.*?<td[^>]*>\s*(-?\d+)\s*</td>'      # SG
+              r'.*?<td[^>]*>\s*(\d+)\s*</td>'        # CA
+              r'.*?<td[^>]*>\s*(\d+)\s*</td>'        # CV
+              r'.*?<td[^>]*>\s*(\d+)\s*</td>',       # %
+              re.DOTALL
+          )
+
+          standing = []
+          for m in pattern.finditer(html):
+              pos, team_id, name, pts, j, v, e, d, gp, gc, sg, ca, cv, aprov = m.groups()
+              standing.append({
+                  "rank":       int(pos),
+                  "team":       name.strip(),
+                  "team_id":    team_id,
+                  "points":     int(pts),
+                  "played":     int(j),
+                  "win":        int(v),
+                  "draw":       int(e),
+                  "lose":       int(d),
+                  "goals_for":  int(gp),
+                  "goals_against": int(gc),
+                  "goals_diff": int(sg),
+                  "yellow":     int(ca),
+                  "red":        int(cv),
+                  "efficiency": int(aprov),
+              })
+
+          if len(standing) < 18:
+              print(f"ERROR: Only {len(standing)} teams found — aborting to preserve existing data")
+              exit(1)
+
+          data = {
+              "fetched_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+              "source": "cbf.com.br",
+              "season": 2026,
+              "response": {
+                  "standing": standing
+              }
+          }
+
+          with open("data.json", "w", encoding="utf-8") as f:
+              json.dump(data, f, ensure_ascii=False, indent=2)
+
+          print(f"OK: {len(standing)} teams written to data.json")
           EOF
 
       - name: Commit updated standings
-        if: steps.time_check.outputs.in_window == 'true'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
